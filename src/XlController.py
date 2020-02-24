@@ -76,7 +76,7 @@ class XlChartGenerator:
         min_col, max_col = col_range
         xvalues = Reference(self.data_sheet, min_col=min_col, min_row=self.label_row, max_col=max_col)
 
-        # 4 cells [cm]
+        # 4 cells
         CHART_WIDTH_CELL = 4
         CHART_WIDTH = 1.9 * CHART_WIDTH_CELL
         CHART_HEIGHT = 1.9 * CHART_WIDTH_CELL * 3/4
@@ -97,6 +97,7 @@ class XlChartGenerator:
                 min_row = i
                 max_row = i
 
+                # ID
                 ID_COL_RANGE = [1, 4]
                 id0_col_letter = get_column_letter(ID_COL_RANGE[0])
                 id1_col_letter = get_column_letter(ID_COL_RANGE[1])
@@ -110,7 +111,9 @@ class XlChartGenerator:
                 id_list.append(id_title)
 
                 values = Reference(self.data_sheet, min_col=min_col, min_row=min_row, max_col=max_col, max_row=max_row)
+                # 系列名
                 series_title = self.data_sheet[id0_col_letter + str(min_row)].value
+
                 series = Series(values, xvalues, title=series_title)
                 chart.series.append(series)
 
@@ -130,7 +133,6 @@ class XlChartGenerator:
             chart.x_axis.scaling.logBase = 10
             chart.y_axis.title = CHART_Y_AXIS_TITLE
             chart.legend.overlay = True
-            # chart.legend.fill = PatternFill(patternType='solid', fgColor='000000')
             chart.legend = None
 
             output_ws.add_chart(chart, get_column_letter(col)+str(row))
