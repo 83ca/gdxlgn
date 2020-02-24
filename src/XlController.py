@@ -1,7 +1,8 @@
 import csv
-from openpyxl import Workbook, load_workbook
+from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter, column_index_from_string
-from openpyxl.chart import ScatterChart, Reference, Series, BarChart
+from openpyxl.chart import ScatterChart, Reference, Series
+from openpyxl.styles import PatternFill
 
 
 def csv_to_list(csv_path):
@@ -34,12 +35,12 @@ class XlObjCreator:
         self.max_rows = len(tuple(self.ws0.rows))
         self.max_cols = len(tuple(self.ws0.columns))
 
-XL_LABEL_ROW = 2
 
-class XlDataController:
-    def __init__(self, xlsx_path, data_sheet_title=''):
+class XlChartGenerator:
+    def __init__(self, xlsx_path, label_row, data_sheet_title=''):
         self.xl = XlObjCreator(xlsx_path)
         self.data_sheet = self.set_data_sheet(data_sheet_title)
+        self.label_row = label_row
 
     def set_data_sheet(self, data_sheet_title):
         if not data_sheet_title:
@@ -50,11 +51,7 @@ class XlDataController:
 
     def load_selector(self, selector_csv_path):
         selector = OutputDataSelector(selector_csv_path)
-        # excel row(1, 2, 3, ...)
-        # list index(0, 1, 2, 3,...) XL_LABEL_ROW+1-1
-        XL_DATA_ROW_INDEX = XL_LABEL_ROW
-
-        xl_labels = [i.value for i in self.data_sheet[XL_LABEL_ROW]]
+        xl_labels = [i.value for i in self.data_sheet[self.label_row]]
         selector_index = xl_labels.index(selector.label)
         selector_index_letter = get_column_letter(selector_index+1)
 
@@ -77,32 +74,86 @@ class XlDataController:
         output_ws = self.xl.wb.create_sheet(output_sheet_name)
         col_range, rows_selected = self.load_selector(selector_csv_path)
         min_col, max_col = col_range
-        xvalues = Reference(self.data_sheet, min_col=min_col, min_row=XL_LABEL_ROW, max_col=max_col)
+        xvalues = Reference(self.data_sheet, min_col=min_col, min_row=self.label_row, max_col=max_col)
+
+        # 4 cells [cm]
+        CHART_WIDTH_CELL = 4
+        CHART_WIDTH = 1.9 * CHART_WIDTH_CELL
+        CHART_HEIGHT = 1.9 * CHART_WIDTH_CELL * 3/4
+        CHART_HEIGHT_CELL = int(CHART_HEIGHT/0.5)+2
+        CHART_POSITION_ROW_INIT = 2
+        CHART_POSITION_COL_INIT = 2
+        CHART_REPEAT = 8
+        CHART_X_AXIS_TITLE = "X"
+        CHART_Y_AXIS_TITLE = "Y"
+
+        row = CHART_POSITION_ROW_INIT
+        col = CHART_POSITION_COL_INIT
+        r = 0
         for rows in rows_selected:
             chart = ScatterChart()
+            id_list = []
             for i in rows:
                 min_row = i
                 max_row = i
+
+                ID_COL_RANGE = [1, 4]
+                id0_col_letter = get_column_letter(ID_COL_RANGE[0])
+                id1_col_letter = get_column_letter(ID_COL_RANGE[1])
+                ids = [j.value for j in self.data_sheet[id0_col_letter + str(min_row): id1_col_letter + str(min_row)][0]]
+                if len(ids) > 1:
+                    id_title = '-'.join([str(j) for j in ids])
+                elif len(ids) == 1:
+                    id_title = ids[0]
+                else:
+                    id_title = 'none'
+                id_list.append(id_title)
+
                 values = Reference(self.data_sheet, min_col=min_col, min_row=min_row, max_col=max_col, max_row=max_row)
-                series = Series(values, xvalues)
+                series_title = self.data_sheet[id0_col_letter + str(min_row)].value
+                series = Series(values, xvalues, title=series_title)
                 chart.series.append(series)
-            output_ws.add_chart(chart, "B2")
+
+            title_cell = get_column_letter(col) + str(row - 1)
+            if len(id_list) > 1:
+                chart_title = ', '.join([str(i) for i in id_list])
+            elif len(id_list) == 1:
+                chart_title = id_list[0]
+            else:
+                chart_title = ''
+            output_ws[title_cell] = chart_title
+
+            # chart style setting
+            chart.width = CHART_WIDTH
+            chart.height = CHART_HEIGHT
+            chart.x_axis.title = CHART_X_AXIS_TITLE
+            chart.x_axis.scaling.logBase = 10
+            chart.y_axis.title = CHART_Y_AXIS_TITLE
+            chart.legend.overlay = True
+            # chart.legend.fill = PatternFill(patternType='solid', fgColor='000000')
+            chart.legend = None
+
+            output_ws.add_chart(chart, get_column_letter(col)+str(row))
+
+            r += 1
+            if r % CHART_REPEAT == 0:
+                row = CHART_POSITION_ROW_INIT
+                col += CHART_WIDTH_CELL
+            else:
+                row += CHART_HEIGHT_CELL
+        return
 
     def save(self, path):
         self.xl.wb.save(path)
 
 
 def main():
-    selector_path = "../sample/sample_selector.csv"
-    selector = OutputDataSelector(selector_path)
-    print(selector.label)
-    print(selector.data_cols_range)
-    print(selector.selectors)
-    xl_path = "../sample/sample2.xlsx"
-    xl = XlDataController(xl_path)
-    print(xl.load_selector(selector_path))
+    selector_path = "sample/sample_selector.csv"
+    xl_path = "sample/sample.xlsx"
+    XL_LABEL_ROW = 2
+    xl = XlChartGenerator(xl_path, XL_LABEL_ROW)
     xl.create_chart_selected("out", selector_path)
-    xl.save("../sample/out.xlsx")
+    xl.save("./sample/out.xlsx")
 
 
 if __name__ == '__main__':
